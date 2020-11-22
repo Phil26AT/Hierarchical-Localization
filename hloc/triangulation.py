@@ -54,7 +54,7 @@ def create_db_from_model(empty_model, database_path):
     return {image.name: i for i, image in images.items()}
 
 
-def import_features(image_ids, database_path, features_path):
+def import_features(image_ids, database_path, features_path, noise_magnitude = 0):
     logging.info('Importing features into the database...')
     hfile = h5py.File(str(features_path), 'r')
     db = COLMAPDatabase.connect(database_path)
@@ -62,6 +62,8 @@ def import_features(image_ids, database_path, features_path):
     for image_name, image_id in tqdm(image_ids.items()):
         keypoints = hfile[image_name]['keypoints'].__array__()
         keypoints += 0.5  # COLMAP origin
+        if noise_magnitude:
+            keypoints += (np.random.rand(*keypoints.shape) *2.0 - 1.0) * noise_magnitude
         db.add_keypoints(image_id, keypoints)
 
     hfile.close()
@@ -167,7 +169,7 @@ def run_triangulation(colmap_path, model_path, database_path, image_dir,
 
 def main(sfm_dir, reference_sfm_model, image_dir, pairs, features, matches,
          colmap_path='colmap', skip_geometric_verification=False,
-         min_match_score=None):
+         min_match_score=None, noise_magnitude = 0.0):
 
     assert reference_sfm_model.exists(), reference_sfm_model
     assert features.exists(), features
@@ -182,7 +184,7 @@ def main(sfm_dir, reference_sfm_model, image_dir, pairs, features, matches,
 
     create_empty_model(reference_sfm_model, empty_model)
     image_ids = create_db_from_model(empty_model, database)
-    import_features(image_ids, database, features)
+    import_features(image_ids, database, features, noise_magnitude=noise_magnitude)
     import_matches(image_ids, database, pairs, matches,
                    min_match_score, skip_geometric_verification)
     if not skip_geometric_verification:
